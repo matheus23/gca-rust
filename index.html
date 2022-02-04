@@ -8,24 +8,51 @@
 
   <body>
     <script type="module">
-      import init, { empty, add, saturate, count_ones } from "./pkg/gca_rust.js";
-      init().then(() => {
-        // 47 random 256bit arrays, emulating 47 hashes
-        // const rands = Array.from(new Array(47)).map(() => crypto.getRandomValues(new Uint8Array(32)))
-        const rand = crypto.getRandomValues(new Uint8Array(32))
-        const iters = 10000
-        let sumCountOnes = 0
-        const start = performance.now()
-        for (let i = 0; i < iters; i++) {
-          const filter = empty()
-          add(filter, rand)
-          sumCountOnes += count_ones(saturate(filter))
-        }
-        const end = performance.now()
+      // import init, { empty, add, saturate, count_ones } from "./pkg/gca_rust.js";
 
-        console.log(`Done in ${end - start}ms or ${((end - start)*1000 / iters).toFixed(4)}μs on average`)
-        console.log(`Avg popcount ${(sumCountOnes / iters).toFixed(4)}`)
-      });
+      // function runWASM() {
+      //   init().then(() => {
+      //     // 47 random 256bit arrays, emulating 47 hashes
+      //     // const rands = Array.from(new Array(47)).map(() => crypto.getRandomValues(new Uint8Array(32)))
+      //     const rand = crypto.getRandomValues(new Uint8Array(32))
+      //     const iters = 10000
+      //     let sumCountOnes = 0
+      //     const start = performance.now()
+      //     for (let i = 0; i < iters; i++) {
+      //       const filter = empty()
+      //       add(filter, rand)
+      //       sumCountOnes += count_ones(saturate(filter))
+      //     }
+      //     const end = performance.now()
+          
+      //     console.log(`Done in ${end - start}ms or ${((end - start)*1000 / iters).toFixed(4)}μs on average`)
+      //     console.log(`Avg popcount ${(sumCountOnes / iters).toFixed(4)}`)
+      //   });
+      // }
+      // window.runWASM = runWASM
+
+      function runWorker() {
+        const worker = new Worker("js/worker.js")
+
+        const sab = new SharedArrayBuffer(1024)
+        const sabBytes = new Uint8Array(sab)
+        const sabInts = new Int32Array(sab)
+
+        worker.onmessage = async e => {
+          if (e.data[0] === "sha256") {
+            const hashOutput = new Uint8Array(await crypto.subtle.digest("sha-256", e.data[1]))
+            sabBytes.set(hashOutput, 4)
+            Atomics.notify(sabInts, 0)
+          }
+        }
+
+        window.addEventListener("beforeunload", () => worker.terminate())
+        
+        // run it
+        worker.postMessage(sab)
+      }
+
+      window.runWorker = runWorker
     </script>
   </body>
 </html>
